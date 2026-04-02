@@ -5,14 +5,21 @@ def setup_logger(
     name: str = __name__,
     level: int = logging.DEBUG
 ) -> logging.Logger:
-    """
-    Ez a függvény létrehoz egy loggert,
-    hogy nyomon tudjuk követni mi történik a folyamat során
-    name: a pontos név ahol a logolás történik, alap változó a file neve
-    level: logolt esemény szintje (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    """Setup-ol egy loggert az folyamat nyomonkövetéséhez.
+
+    Args:
+        name: Logger neve, általában (__name__).
+        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+
+    Returns:
+        Logger instance.
     """
     logger = logging.getLogger(name)
     logger.setLevel(level)
+
+    # Duplikáció elkerülése miatt
+    if logger.handlers:
+        return logger
 
     handler = logging.StreamHandler()
     handler.setLevel(level)
@@ -23,7 +30,6 @@ def setup_logger(
     )
 
     handler.setFormatter(formatter)
-
     logger.addHandler(handler)
 
     return logger

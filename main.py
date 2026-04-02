@@ -13,7 +13,7 @@ if __name__ == "__main__":
         logger=logger
     )
 
-    calibration_data = img_data.load_data()
+    calibration_data = img_data.load_cal_data()
     camera_data = img_data.load_camera()
 
     print(f"Calibration data: {calibration_data}")
