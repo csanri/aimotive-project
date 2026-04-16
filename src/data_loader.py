@@ -1,19 +1,7 @@
-import json
 import logging
-import os
 
-from typing import Any
-
-import cv2
-
-from .models import CameraData
-
-CAMERA_TABLE = {
-    "back_camera": "B_MIDRANGECAM_C",  # back camera
-    "front_camera": "F_MIDLONGRANGECAM_CL",  # front camera CL
-    "left_camera": "M_FISHEYE_L",  # left camera
-    "right_camera": "M_FISHEYE_R"  # right camera
-}
+from .camera_loader import CameraDataLoader
+from .lidar_loader import LidarDataLoader
 
 
 class ImgData:
@@ -41,77 +29,30 @@ class ImgData:
         self.frame_id = frame_id
         self.logger = logger
 
-    def load_cal_data(self) -> dict[str, Any]:
-        """JSON file-ból betölti a kamera adatokat.
+    def __getitem__(self, key: str):
+        """Access data using dictionary-like syntax.
+
+        Args:
+            key: Data key ('calibration', 'lidar', or camera name like 'front_camera')
 
         Returns:
-            Dict ami tartalmazza a kalibrációs adatokat
+            Requested data (lazy-loaded on first access)
         """
-        path = os.path.join(
-            self.folder,
-            self.section_id,
-            "sensor",
-            "calibration",
-            "calibration.json"
-        )
-        self.logger.info(f"Loading calibration parameters from: '{path}'")
-
-        if not os.path.exists(path):
-            self.logger.error(f"Calibration file does not exist: '{path}'")
-            raise FileNotFoundError(f"Calibration file not found: {path}")
-
-        try:
-            with open(path, "r") as f:
-                data = json.load(f)
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid JSON in calibration file: '{path}' - {e}")
-            raise
-
-        self.logger.info(f"Calibration parameters loaded successfully: '{path}'")
-        return data
-
-    def load_camera(self) -> CameraData:
-        """Kamera képek betöltése.
-
-        Returns:
-            CameraData, tartalmazza a képeket és egy idx(section_id, frame_id).
-        """
-        path = os.path.join(
-            self.folder,
-            self.section_id,
-            "sensor",
-            "camera"
-        )
-
-        if not os.path.exists(path):
-            self.logger.error(f"Camera directory does not exist: '{path}'")
-            raise FileNotFoundError(f"Camera directory not found: {path}")
-
-        self.logger.info(f"Loading camera data from: '{path}'")
-
-        cameras = {}
-        for camera_name, camera_dir in CAMERA_TABLE.items():
-            image_path = os.path.join(
-                path,
-                camera_dir,
-                f"{camera_dir}{self.frame_id}.jpg"
+        if key == 'lidar':
+            return LidarDataLoader(
+                folder=self.folder,
+                section_id=self.section_id,
+                frame_id=self.frame_id,
+                logger=self.logger
             )
-            self.logger.debug(f"Loading {camera_name} from: '{image_path}'")
+        elif key == "camera":
+            return CameraDataLoader(
+                folder=self.folder,
+                section_id=self.section_id,
+                frame_id=self.frame_id,
+                logger=self.logger
+            )
+        else:
+            raise KeyError(f"Unknown key: {key}. Valid keys: {["camera", 'calibration', 'lidar']}")
 
-            image = cv2.imread(str(image_path))
-            if image is None:
-                self.logger.error(f"Failed to load {camera_name} image: '{image_path}'")
-                raise ValueError(f"Could not load image: {image_path}")
 
-            cameras[camera_name] = image
-            self.logger.debug(f"{camera_name} loaded successfully")
-
-        self.logger.info("All camera images loaded successfully")
-
-        return CameraData(
-            idx=(self.section_id, self.frame_id),
-            back_camera=cameras["back_camera"],
-            front_camera=cameras["front_camera"],
-            left_camera=cameras["left_camera"],
-            right_camera=cameras["right_camera"]
-        )
