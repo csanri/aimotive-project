@@ -5,14 +5,14 @@ def setup_logger(
     name: str = __name__,
     level: int = logging.DEBUG
 ) -> logging.Logger:
-    """Setup-ol egy loggert az folyamat nyomonkövetéséhez.
+    """Setup-ol egy loggert az folyamat nyomonkövetéséhez
 
-    Args:
-        name: Logger neve, általában (__name__).
-        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+    Parameters:
+        name: Logger neve, általában (__name__)
+        level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
     Returns:
-        Logger instance.
+        Logger instance
     """
     logger = logging.getLogger(name)
     logger.setLevel(level)

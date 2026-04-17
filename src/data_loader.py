@@ -3,10 +3,12 @@ import logging
 from .camera_loader import CameraDataLoader
 from .lidar_loader import LidarDataLoader
 
+VALID_KEYS = ["camera", "lidar"]
+
 
 class ImgData:
     """
-    Adatbetöltő a kalibrációs, kamera, és LIDAR adatoknak
+    Class Kamera és LIDAR adatok betöltésére
     """
 
     def __init__(
@@ -16,28 +18,34 @@ class ImgData:
         frame_id: str,
         logger: logging.Logger
     ):
-        """Init ImgData loggerrel együtt.
+        """Létrehozza az ImgData classt
 
-        Args:
-            folder: Adatkönyvtár.
-            section_id: Adott section azonosítója.
-            frame_id: Adott frame száma.
-            logger: Logger, a folyamat nyomonkövetésére.
+        Parameters:
+            folder: Az adatokat tartalmazó mappa elérési útja
+            section_id: A section azonosítója
+            frame_id: A frame azonosítója
+            logger: Python logger a nyomonkövetésre
         """
+
         self.folder = folder
         self.section_id = section_id
         self.frame_id = frame_id
         self.logger = logger
 
-    def __getitem__(self, key: str):
-        """Access data using dictionary-like syntax.
+    def __getitem__(self, key: str) -> CameraDataLoader | LidarDataLoader:
+        """
+        Dictionary a kamera és LIDAR adatokhoz
 
-        Args:
-            key: Data key ('calibration', 'lidar', or camera name like 'front_camera')
+        Parameters:
+            key: Az adattípus kulcsa ('camera', 'lidar')
 
         Returns:
-            Requested data (lazy-loaded on first access)
+            CameraDataLoader: ha key == 'camera'
+            LidarDataLoader:  ha key == 'lidar'
         """
+
+        self.logger.info(f"Fetching data: '{key}'")
+
         if key == 'lidar':
             return LidarDataLoader(
                 folder=self.folder,
@@ -53,6 +61,5 @@ class ImgData:
                 logger=self.logger
             )
         else:
-            raise KeyError(f"Unknown key: {key}. Valid keys: {["camera", 'calibration', 'lidar']}")
-
-
+            self.logger.error(f"Unknown key: {key}. Valid keys: {VALID_KEYS}")
+            raise KeyError(f"Unknown key: {key}. Valid keys: {VALID_KEYS}")
