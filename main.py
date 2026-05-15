@@ -10,10 +10,10 @@ if __name__ == "__main__":
     logger = setup_logger()
     logger.info("Start process")
 
-    BASE_FOLDER = r"C:\aimotive projektmunka\train\highway"
+    BASE_FOLDER = "/run/media/csanri/SSD/aimotive-dataset/"
     CSV_PATH = "./data/id_data.csv"
 
-    #laz np.étrehozunk egy mappát a kimenetnek
+    # laz np.étrehozunk egy mappát a kimenetnek
     OUTPUT_DIR = "output_samples"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -23,34 +23,34 @@ if __name__ == "__main__":
         logger.error(f"Error: {e}")
         exit()
 
-    processed_count=0
-    max_to_process=5
+    processed_count = 0
+    max_to_process = 5
 
     for i in range(len(dataset)):
-        if processed_count>=max_to_process:
+        if processed_count >= max_to_process:
             break
 
-        data=dataset[i]
+        data = dataset[i]
         if data is None:
             continue
 
-        processed_count+=1
+        processed_count += 1
 
-        #sdatok kinyerése
-        image = data['image']  #[H,W,3]
-        depth = data['depth']  #[H,W,1]
-        mask = data['gt_mask']  #[H,W,1]
+        # adatok kinyerése
+        image = data['image']   # [H,W,3]
+        depth = data['depth']   # [H,W,1]
+        mask = data['gt_mask']  # [H,W,1]
 
-        f_id=dataset.ids.iloc[i, 2]  #frame azonosító a fájlnévhez
+        f_id = dataset.ids.iloc[i, 2]  # frame azonosító a fájlnévhez
 
         np.save(os.path.join(OUTPUT_DIR, f"frame_{f_id}_depth.npy"), depth)
         np.save(os.path.join(OUTPUT_DIR, f"frame_{f_id}_mask.npy"), mask)
 
-        #Eredeti kép mentése
+        # Eredeti kép mentése
         cv2.imwrite(os.path.join(OUTPUT_DIR, f"frame_{f_id}_img.jpg"), image)
 
-        #Maszk mentése (0-1 tartományt átrakjuk 0-255-re, hogy látszódjon)
-        mask_visual=(mask * 255).astype(np.uint8)
+        # Maszk mentése (0-1 tartományt átrakjuk 0-255-re, hogy látszódjon)
+        mask_visual = (mask * 255).astype(np.uint8)
         cv2.imwrite(os.path.join(OUTPUT_DIR, f"frame_{f_id}_mask.png"), mask_visual)
         """ 
         #Mélységtérkép színezett mentése
