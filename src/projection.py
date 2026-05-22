@@ -12,19 +12,19 @@ class CameraProjection:
 
     def lidar_to_camera(self):
         lp = self.lidar_points[:, :3]
-        #homogén koordináták (N, 4) a 4x4-es mátrixszorzáshoz
+        # homogén koordináták (N, 4) a 4x4-es mátrixszorzáshoz
         lp_hom = np.hstack([lp, np.ones((lp.shape[0], 1))])
 
-        #test -> kamera transzformáció
+        # test -> kamera transzformáció
         points_cam = self.extrinsic @ lp_hom.T
 
-        #csak a kamera előtt lévő pontok (Z > 0) megtartása
+        # csak a kamera előtt lévő pontok (Z > 0) megtartása
         valid = points_cam[2, :] > 0
         points_cam_valid = points_cam[:, valid]
 
-        #vetítés a 2D képsíkra
+        # vetítés a 2D képsíkra
         uvw = self.intrinsic @ points_cam_valid
-        #perspektivikus osztás (u, v koordináták kinyerése)
+        # perspektivikus osztás (u, v koordináták kinyerése)
         uv = (uvw[:2] / (uvw[2] + 1e-8)).T
         depths = points_cam_valid[2, :]
 
@@ -38,14 +38,14 @@ class CameraProjection:
         uv, depths = self.lidar_to_camera()
         h, w = self.image.shape[:2]
 
-        #kiszűrjük azokat a pontokat, amik a képkereten kívülre esnének
+        # kiszűrjük azokat a pontokat, amik a képkereten kívülre esnének
         mask = (uv[:, 0] >= 0) & (uv[:, 0] < w) & \
                (uv[:, 1] >= 0) & (uv[:, 1] < h)
 
         uv_valid = uv[mask]
         depths_valid = depths[mask].reshape(-1, 1)
 
-        #összefűzés (N, 3) méretű tömbbé
+        # összefűzés (N, 3) méretű tömbbé
         return np.hstack([uv_valid, depths_valid])
 
     def show_points_on_img(self, window_name="Projection"):
@@ -53,7 +53,7 @@ class CameraProjection:
         uv, depths = self.lidar_to_camera()
         h, w = self.image.shape[:2]
 
-        #mélység normalizálása a színezéshez
+        # mélység normalizálása a színezéshez
         d_min, d_max = depths.min(), depths.max()
         depths_norm = (depths - d_min) / (d_max - d_min + 1e-8)
 

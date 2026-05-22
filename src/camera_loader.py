@@ -15,7 +15,13 @@ CAMERA_TABLE = {
 
 
 class CameraDataLoader:
-    def __init__(self, folder: str, section_id: str, frame_id: str, logger: logging.Logger):
+    def __init__(
+        self,
+        folder: str,
+        section_id: str,
+        frame_id: str,
+        logger: logging.Logger
+    ):
         self.folder = folder
         self.section_id = section_id
         self.frame_id = frame_id
@@ -60,11 +66,22 @@ class CameraDataLoader:
     def read_camera_params(self, camera: str) -> CameraParams:
         params = self._load_calibration_data()[CAMERA_TABLE[camera]]
         model = params["model"]
-        intrinsic = self._get_intrinsic(params["focal_length_px"], params["principal_point_px"])
+        intrinsic = self._get_intrinsic(
+            params["focal_length_px"],
+            params["principal_point_px"]
+        )
         extrinsic = params["RT_sensor_from_body"]
-        dist = np.array(params.get("distortion_coeffs", [0, 0, 0, 0]), dtype=np.float32)
+        dist = np.array(
+            params.get("distortion_coeffs", [0, 0, 0, 0]),
+            dtype=np.float32
+        )
 
-        return CameraParams(model=model, intrinsic=intrinsic, extrinsic=extrinsic, dist=dist)
+        return CameraParams(
+            model=model,
+            intrinsic=intrinsic,
+            extrinsic=extrinsic,
+            dist=dist
+        )
 
     def _load_camera_internal(self, camera_id: str) -> np.ndarray: #létezik-e a fájl
         camera = CAMERA_TABLE[camera_id]

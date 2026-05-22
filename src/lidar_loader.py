@@ -81,7 +81,7 @@ class LidarDataLoader:
             LidarData: Az feldolgozott pontfelhőt tartalmazó adatok
         """
         path = self._get_lidar_path()
-        self.logger.info(f"Loading LIDAR files from: '{path}'")
+        self.logger.debug(f"Loading LIDAR files from: '{path}'")
 
         try:
             las = laspy.read(path)
@@ -96,7 +96,7 @@ class LidarDataLoader:
         self.logger.debug(f"Size of pointcloud: {lidar_pcd.shape[0]} points")
 
         egomotion_path = self._get_egomotion_path()
-        self.logger.info(f"Loading egomotion JSON from: '{egomotion_path}'")
+        self.logger.debug(f"Loading egomotion JSON from: '{egomotion_path}'")
 
         with open(egomotion_path) as f:
             egomotion = json.load(f)
@@ -116,7 +116,7 @@ class LidarDataLoader:
         )
         lidar_data[:, :3] = (lidar_data_coords @ RT_transform.T)[:, :3]
 
-        self.logger.info(
+        self.logger.debug(
             f"LIDAR data loaded: {lidar_data.shape[0]}"
         )
 

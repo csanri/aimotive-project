@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import os
 import torch
+import random
+
 from .camera_loader import CameraDataLoader
 from .lidar_loader import LidarDataLoader
 from .projection import CameraProjection
@@ -14,40 +16,62 @@ class Dataset:
 
         df = pd.read_csv(csv_path, dtype=str, index_col=0)
 
-        self.logger.info(f"Checking: {os.path.join(self.folder, df['section_id'].iloc[0])}")
-        self.logger.info(f"Exists: {os.path.exists(os.path.join(self.folder, df['section_id'].iloc[0]))}")
+        self.logger.debug(f"Checking: {os.path.join(self.folder, df['section_id'].iloc[0])}")
+        self.logger.debug(f"Exists: {os.path.exists(os.path.join(self.folder, df['section_id'].iloc[0]))}")
 
         # csak azokat a sorokat tartjuk meg, ahol a mappa létezik
         self.valid_ids = []
-        self.logger.info("Filtering csv for existing files...")
+        self.logger.debug("Filtering csv for existing files...")
 
         _folder = folder
         mask = df["section_id"].apply(
             lambda s: os.path.exists(os.path.join(_folder, s))
         )
-        self.logger.info(f"Mask true count: {mask.sum()}")
+        self.logger.debug(f"Mask true count: {mask.sum()}")
 
         self.valid_df = df[mask].reset_index(drop=True)
-        self.logger.info(f"Filtering: {len(self.valid_df)} valid samples.")
-
-        # for i in range(len(df)):
-        #     section_id = df.iloc[i, 1]
-        #     if os.path.exists(os.path.join(self.folder, section_id)):
-        #         self.valid_ids.append(df.iloc[i])
-
-        # self.logger.info(f"Filtering: {len(self.valid_ids)} valid samples.")
+        self.logger.debug(f"Filtering: {len(self.valid_df)} valid samples.")
 
     def __len__(self):
         return len(self.valid_df)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int):
+        # ha egy minta betöltése sikertelen (pl. hiányzó fájl),
+        # véletlenszerű másik mintát próbálunk helyette
+        for attempt in range(10):
+            try:
+                return self._load_sample(idx)
+            except FileNotFoundError as e:
+                self.logger.warning(
+                    f"Hiányzó fájl (idx={idx}, attempt={attempt+1}): {e}"
+                )
+                idx = random.randrange(len(self.valid_df))
+            except Exception as e:
+                self.logger.warning(
+                    f"Betöltési hiba (idx={idx}, attempt={attempt+1}): {e}"
+                )
+                idx = random.randrange(len(self.valid_df))
+
+        raise RuntimeError("Failed loading sample")
+
+    def _load_sample(self, idx: int) -> dict:
         row = self.valid_df.iloc[idx]
         section_id = row["section_id"]
         frame_id = row["frame_id"]
 
         # szenzorok betöltése
-        lidar_loader = LidarDataLoader(self.folder, section_id, frame_id, self.logger)
-        camera_loader = CameraDataLoader(self.folder, section_id, frame_id, self.logger)
+        lidar_loader = LidarDataLoader(
+            self.folder,
+            section_id,
+            frame_id,
+            self.logger
+        )
+        camera_loader = CameraDataLoader(
+            self.folder,
+            section_id,
+            frame_id,
+            self.logger
+        )
 
         cam = camera_loader.front_camera
         img = cam.data  # [H,W,3]
@@ -101,7 +125,6 @@ class Dataset:
             u, v, depths = u[valid_indices], v[valid_indices], depths[valid_indices]
 
             # értékek beírása a mátrixokba
-
             depth_map[v, u, 0] = depths
             mask[v, u, 0] = 1.0
 
