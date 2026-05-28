@@ -2,23 +2,52 @@ import os
 import torch
 import logging
 
-from torch.utils.data import DataLoader
+import segmentation_models_pytorch as smp
+import pandas as pd
+
+from torch.utils.data import DataLoader, ConcatDataset
 from torch.amp import GradScaler
 from src.logger import setup_logger
 from src.data_loader import Dataset
-from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from train import train_epoch
 
 MODEL_ID = "depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf"
 
-BASE_FOLDER = "/mnt/oldssd/aimotive-dataset/train/highway/"
+BASE_FOLDER = "/mnt/oldssd/aimotive-dataset/train/"
 CSV_PATH = "./data/id_data.csv"
 OUTPUT_DIR = "batch_test"
+CHECKPOINT_DIR = "weights"
+DATA_DIRS = ["highway", "night", "rain", "urban"]
 
-EPOCHS = 10
-BATCH_SIZE = 2
-GRAD_ACCUM_STEPS = 4
-LR = 1e-5
+EPOCHS = 5
+BATCH_SIZE = 7
+GRAD_ACCUM_STEPS = 1
+LR = 1e-3
+
+
+def save_checkpoint(
+        model,
+        optimizer,
+        scaler,
+        epoch: int,
+        loss: float,
+        logger
+) -> None:
+    """Modell állapot mentése .pt fájlba."""
+    path = os.path.join(
+        CHECKPOINT_DIR,
+        f"epoch_{epoch:03d}_loss_{loss:.4f}.pt"
+    )
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+    torch.save({
+        "epoch":                epoch,
+        "model_state_dict":     model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scaler_state_dict":    scaler.state_dict(),
+        "loss":                 loss,
+    }, path)
+    logger.info(f"Checkpoint mentve: {path}")
+
 
 if __name__ == "__main__":
     logger = setup_logger(level=logging.INFO)
@@ -30,30 +59,47 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Device: {device}")
 
-    processor = AutoImageProcessor.from_pretrained(MODEL_ID)
-    model = AutoModelForDepthEstimation.from_pretrained(MODEL_ID).to(device)
+    model = smp.Unet(
+        encoder_name="resnet34",
+        encoder_weights="imagenet",
+        in_channels=3,
+        classes=1
+    ).to(device)
 
     logger.info("Model loaded")
-
-    vram_used = torch.cuda.memory_allocated(device) / 1024**3
-    logger.info(f"VRAM after loading the model: {vram_used:.2f} GB")
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
     scaler = GradScaler("cuda")
 
-    dataset = Dataset(csv_path=CSV_PATH, folder=BASE_FOLDER, logger=logger)
+    datasets = [
+        Dataset(
+            csv_path=CSV_PATH,
+            folder=os.path.join(BASE_FOLDER, d),
+            logger=logger
+        ) for d in ["highway", "night", "rain", "urban"]
+    ]
+
+    combined_dataset = ConcatDataset(datasets)
+
     train_loader = DataLoader(
-        dataset,
+        combined_dataset,
         batch_size=BATCH_SIZE,
-        shuffle=True
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True
     )
+
+    total_losses_per_epoch = pd.DataFrame()
 
     for epoch in range(1, EPOCHS + 1):
         logger.info(f"==================== Epoch: {epoch}/{EPOCHS} ====================")
-        train_loss = train_epoch(
+
+        logger.info(f"Dataset mérete: {len(combined_dataset)}")
+        logger.info(f"Batch-ek száma: {len(train_loader)}")
+
+        losses_per_epoch, train_loss = train_epoch(
             model=model,
-            processor=processor,
             train_loader=train_loader,
             optimizer=optimizer,
             device=device,
@@ -65,61 +111,20 @@ if __name__ == "__main__":
 
         scheduler.step()
         logger.info(f"LR: {scheduler.get_last_lr()[0]:.2e}")
+        total_losses_per_epoch[f"EPOCH_{epoch}"] = losses_per_epoch
 
-    # csak az első batch lekérése
-    # batch_data = next(iter(train_loader))
+        save_checkpoint(
+            model=model,
+            optimizer=optimizer,
+            scaler=scaler,
+            epoch=epoch,
+            loss=train_loss,
+            logger=logger
+        )
 
-    # images = batch_data['image']   # [5, 3, 704, 1024]
-    # depths = batch_data['depth']   # [5, 3, 704, 1024]
-    # masks = batch_data['gt_mask']  # [5, 3, 704, 1024]
+        total_losses_per_epoch.to_csv(
+            f"losses_{epoch}.csv",
+            index=False
+        )
 
-    # logger.info("random frame:")
-
-    # random_predictions = torch.rand_like(depths)*50.0
-
-    # # mask l1 loss
-    # loss = lossfunc(random_predictions, depths, masks)
-
-    # images = images.to(device)
-    # depths = depths.to(device)
-    # masks = masks.to(device)
-
-    # for i in range(5):
-    #     img = images[i]
-    #     depth = depths[i]
-    #     mask = masks[i]
-
-    #     logger.debug(f"Image data: {img}")
-    #     logger.debug(f"Image shape: {img.shape}")
-
-    #     logger.debug(f"Depth data: {depth}")
-    #     logger.debug(f"Depth shape: {depth.shape}")
-
-    #     logger.debug(f"Mask data: {mask}")
-    #     logger.debug(f"Mask shape: {mask.shape}")
-
-    #     prefix = f"sample_{i}"
-
-    #     np.save(os.path.join(OUTPUT_DIR, f"{prefix}_depth_raw.npy"), depth)
-    #     np.save(os.path.join(OUTPUT_DIR, f" {prefix}_mask_raw.npy"), mask)
-
-    #     eredeti kép
-    #     cv2.imwrite(os.path.join(OUTPUT_DIR, f"{prefix}_image.jpg"), img)
-
-    #     mask
-    #     mask_visual = (mask_np * 255).astype(np.uint8)
-    #     cv2.imwrite(os.path.join(OUTPUT_DIR, f"{prefix}_mask.png"), mask_visual)
-    # """
-    #     #színes mélység
-    #     depth_visual = np.zeros_like(img_np)
-    #     if np.any(mask_np > 0):
-    #         d_min, d_max = depth_np[mask_np > 0].min(), depth_np[mask_np > 0].max()
-    #         depth_norm = 255 * (depth_np - d_min) / (d_max - d_min + 1e-8)
-    #         depth_norm = depth_norm.astype(np.uint8)
-    #         depth_color = cv2.applyColorMap(depth_norm, cv2.COLORMAP_JET)
-    #         depth_visual = cv2.bitwise_and(depth_color, depth_color, mask=mask_visual)
-
-    #     cv2.imwrite(os.path.join(OUTPUT_DIR, f"{prefix}_depth_view.png"), depth_visual)
-    # """
-    # logger.info(f"Loss: {loss.item():.4f} méter")
     logger.info("Done")
