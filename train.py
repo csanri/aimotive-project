@@ -77,3 +77,36 @@ def train_epoch(
         optimizer.zero_grad()
 
     return total_losses, running_loss / len(train_loader)
+
+
+def validate_epoch(
+    model,
+    val_loader: DataLoader,
+    device:     str,
+    logger:     Logger
+) -> tuple[list, float]:
+    """
+    Validáció: csak forward pass, nincs gradiens, nincs optimizer step.
+    """
+    model.eval()
+    running_loss = .0
+    total_batches = len(val_loader)
+    total_losses = []
+
+    with torch.no_grad():
+        for i, data in enumerate(val_loader):
+            images = data["image"].to(device)
+            depths = data["depth"].to(device)
+            masks = data["gt_mask"].to(device)
+            with autocast("cuda"):
+                preds = model(images)
+                loss = lossfunc(preds, depths, masks)
+            running_loss += loss.item()
+            total_losses.append(running_loss / (i + 1))
+            logger.info(
+                f"Val Batch [{i+1:4d}/{total_batches}] | "
+                f"Loss: {loss.item():8.4f} m | "
+                f"Avg: {running_loss / (i+1):8.4f} m"
+            )
+
+    return total_losses, running_loss / len(val_loader)
